@@ -1,63 +1,65 @@
 //! # web_ical
 //!
-//! `web_ical` is an esay iCalendar Rust library. It’s goals are to read and write ics web files (Google Calendar, Airbnb Calendar and more) data in a developer-friendly way.
+//! `web_ical` is an esay iCalendar Rust library. It’s goals are to read and
+//! write ics web files (Google Calendar, Airbnb Calendar and more) data in a
+//! developer-friendly way.
 //!
 //! # Examples 1
+//!
 //! ```
-//! extern crate web_ical;
+//! use web_ical::Calendar;
 //!
-//!use web_ical::Calendar;
+//! fn main() {
+//!     let icals = Calendar::new(
+//!         "https://www.webcal.guru/en-IN/download_calendar?calendar_instance_id=21698",
+//!     )
+//!     .unwrap();
 //!
-//!fn main() {
-//!    let icals = Calendar::new("http://ical.mac.com/ical/US32Holidays.ics").unwrap();
-//!
-//!    for ical in &icals.events{
+//!     for ical in &icals.events {
 //!         println!("Event: {}", ical.summary);
 //!         println!("Started: {}", ical.dtstart.format("%a, %e %b %Y - %T"));
-//!    }
-//!}
+//!     }
+//! }
 //! ```
+//!
 //! # Examples 2
+//!
 //! ```
 //! extern crate web_ical;
 //!
-//!use web_ical::Calendar;
+//! use web_ical::Calendar;
 //!
-//!fn main() {
-//!    let icals = Calendar::new("http://ical.mac.com/ical/US32Holidays.ics");
+//! fn main() {
+//!     let icals = Calendar::new(
+//!         "https://www.webcal.guru/en-IN/download_calendar?calendar_instance_id=21698",
+//!     )
+//!     .unwrap();
 //!     println!("UTC now is: {}", icals.events[0].dtstart);
-//!     println!("UTC now in RFC 2822 is: {}", icals.events[0].dtstart.to_rfc2822());
-//!     println!("UTC now in RFC 3339 is: {}", icals.events[0].dtstart.to_rfc3339());
-//!     println!("UTC now in a custom format is: {}", icals.events[0].dtstart.format("%a %b %e %T %Y"));
-//!}
+//!     println!(
+//!         "UTC now in RFC 2822 is: {}",
+//!         icals.events[0].dtstart.to_rfc2822()
+//!     );
+//!     println!(
+//!         "UTC now in RFC 3339 is: {}",
+//!         icals.events[0].dtstart.to_rfc3339()
+//!     );
+//!     println!(
+//!         "UTC now in a custom format is: {}",
+//!         icals.events[0].dtstart.format("%a %b %e %T %Y")
+//!     );
+//! }
 //! ```
-extern crate chrono;
 
-use anyhow::Context;
-use chrono::Utc;
-use chrono::{DateTime, NaiveDateTime};
+use chrono::prelude::*;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::Path;
 
-///Convert datetime string to [`DateTime`](https://docs.rs/chrono/0.4.7/chrono/struct.DateTime.html)
-///
-/// # Examples
-///
-/// ```
-/// let result_obj_aux: Result<DateTime<Utc>, String>;
-/// result_obj_aux = convert_datetime("20190522T232701Z", "%Y%m%dT%H%M%SZ".to_string());
-/// match result_obj_aux{
-///     Ok(val) => {
-///             println!("{}", val);
-///         },
-///     Err(_) => (),
-///}
-///```
+/// Convert datetime string to [`DateTime`](https://docs.rs/chrono/0.4.7/chrono/struct.DateTime.html)
 fn convert_datetime(value: &str, format: &str) -> anyhow::Result<DateTime<Utc>> {
     let no_timezone_aux = NaiveDateTime::parse_from_str(value, format)?;
-    Ok(DateTime::from_utc(no_timezone_aux, Utc))
+    Ok(DateTime::from_naive_utc_and_offset(no_timezone_aux, Utc))
 }
 
 ///store all events from iCalendar.
@@ -79,14 +81,15 @@ pub struct Events {
 }
 
 impl Events {
-    ///Check if the events is all day.
+    /// Check if the events is all day.
     pub fn is_all_day(&self) -> bool {
         self.dtend.signed_duration_since(self.dtstart).num_hours() >= 24
     }
+
     pub fn empty() -> Events {
         let no_timezone =
             NaiveDateTime::parse_from_str("20190630T130000Z", "%Y%m%dT%H%M%SZ").unwrap();
-        let date_tz: DateTime<Utc> = DateTime::from_utc(no_timezone, Utc);
+        let date_tz: DateTime<Utc> = DateTime::from_naive_utc_and_offset(no_timezone, Utc);
         Events {
             dtstart: date_tz,
             dtend: date_tz,
@@ -125,16 +128,13 @@ macro_rules! assign_if_ok {
 }
 
 impl Calendar {
-    ///Request HTTP or HTTPS to iCalendar url.
+    /// Request HTTP or HTTPS to iCalendar url.
     pub fn new(url: &str) -> anyhow::Result<Calendar> {
-        let data = reqwest::get(url)
-            .context("Could not make request")?
-            .text()
-            .context("Could not read response")?;
+        let data = reqwest::blocking::get(url)?.text()?;
         Self::new_from_data(&data)
     }
 
-    ///Create a `Calendar` from text in memory.
+    /// Create a `Calendar` from text in memory.
     pub fn new_from_data(data: &str) -> anyhow::Result<Calendar> {
         let text_data = data.lines().collect::<Vec<_>>();
         let mut struct_even: Vec<Events> = Vec::new();
@@ -203,22 +203,17 @@ impl Calendar {
                 "TRANSP" => {
                     even_temp.transp = value_cal;
                 }
-              
-                "DTSTART" => match convert_datetime(&value_cal, "%Y%m%dT%H%M%SZ") {
-                    Ok(val) => {
+
+                "DTSTART" => {
+                    if let Ok(val) = convert_datetime(&value_cal, "%Y%m%dT%H%M%SZ") {
                         even_temp.dtstart = val;
                     }
-                    Err(_) => (),
-                },
+                }
                 "DTSTART;VALUE=DATE" => {
                     let aux_date = value_cal + "T000000Z";
-                    match convert_datetime(&aux_date, "%Y%m%dT%H%M%SZ") {
-                        Ok(val) => {
-                            even_temp.dtstart = val;
-                        }
-                        Err(_) => (),
+                    if let Ok(val) = convert_datetime(&aux_date, "%Y%m%dT%H%M%SZ") {
+                        even_temp.dtstart = val;
                     }
-
                 }
                 "DTEND;VALUE=DATE" => {
                     let time_cal = "T002611Z";
@@ -265,16 +260,22 @@ impl Calendar {
             events: struct_even,
         })
     }
-    ///Create your own iCalendar instance
+
+    /// Create your own iCalendar instance
+    ///
     /// # Create an iCalendar
+    ///
     /// ```
-    /// let mut ical =  Calendar::create(
-    ///                       "-//My Business Inc//My Calendar 70.9054//EN",
-    ///                       "2.0",
-    ///                       "GREGORIAN",
-    ///                       "PUBLISH",
-    ///                       "example@gmail.com",
-    ///                       "America/New_York");
+    /// use web_ical::Calendar;
+    ///
+    /// let mut ical = Calendar::create(
+    ///     "-//My Business Inc//My Calendar 70.9054//EN",
+    ///     "2.0",
+    ///     "GREGORIAN",
+    ///     "PUBLISH",
+    ///     "example@gmail.com",
+    ///     "America/New_York",
+    /// );
     /// ```
     pub fn create(
         prodid: &str,
@@ -294,59 +295,59 @@ impl Calendar {
             events: vec![],
         }
     }
-    ///Add events to the calendar.
+
+    /// Add events to the calendar.
     ///
     /// # Add events
+    ///
     /// ```
-    /// let mut start_cal:  DateTime<Utc> = Utc::now();
-    //  let date_tz: DateTime<Utc> = Utc::now();
-    /// let start = date_tz.checked_add_signed(Duration::days(2));
+    /// use chrono::prelude::*;
+    /// use std::time::Duration;
+    ///
+    /// use web_ical::{Calendar, Events};
+    ///
+    /// let mut start_cal = Utc::now();
+    /// let start = Utc::now().checked_add_signed(chrono::Duration::days(2));
     ///
     /// match start {
-    ///       Some(x) => {
-    ///              start_cal = x;
-    ///       },
-    ///       None => ()
+    ///     Some(x) => {
+    ///         start_cal = x;
+    ///     }
+    ///     None => (),
     /// }
-    /// let own_event = Events{
-    ///                    
-    ///                    dtstart:        start_cal,
-    ///                    dtend:          start_cal,
-    ///                    dtstamp:        date_tz,
-    ///                    uid:            "786566jhjh5546@google.com".to_string(),
-    ///                    created:        date_tz,
-    ///                    description:    "The description".to_string(),
-    ///                    last_modified:  date_tz,
-    ///                    location:       "Homestead FL".to_string(),
-    ///                    sequence:       0,
-    ///                    status:         "CONFIRMED".to_string(),
-    ///                    summary:        "My business (Not available)".to_string(),
-    ///                    transp:         "OPAQUE".to_string()
     ///
-    ///    };
-    /// let mut ical =  Calendar::create(
-    ///                       "-//My Business Inc//My Calendar 70.9054//EN",
-    ///                       "2.0",
-    ///                       "GREGORIAN",
-    ///                       "PUBLISH",
-    ///                       "example@gmail.com",
-    ///                       "America/New_York");
+    /// let own_event = Events {
+    ///     dtstart: start_cal,
+    ///     dtend: start_cal,
+    ///     dtstamp: Utc::now(),
+    ///     uid: "786566jhjh5546@google.com".to_string(),
+    ///     created: Utc::now(),
+    ///     description: "The description".to_string(),
+    ///     last_modified: Utc::now(),
+    ///     location: "Homestead FL".to_string(),
+    ///     sequence: 0,
+    ///     status: "CONFIRMED".to_string(),
+    ///     summary: "My business (Not available)".to_string(),
+    ///     transp: "OPAQUE".to_string(),
+    /// };
+    ///
+    /// let mut ical = Calendar::create(
+    ///     "-//My Business Inc//My Calendar 70.9054//EN",
+    ///     "2.0",
+    ///     "GREGORIAN",
+    ///     "PUBLISH",
+    ///     "example@gmail.com",
+    ///     "America/New_York",
+    /// );
     ///
     /// ical.add_event(own_event);
     /// println!("{}", ical.events[0].summary);
-    ///
     /// ```
     pub fn add_event(&mut self, event: Events) {
         self.events.push(event);
     }
 
     /// Export iCalendar to any `Write` implementer.
-    ///
-    /// # iCalendar to stdout
-    /// ```
-    /// ical.export_to(&mut std::io::stdout()).expect("Could not export to stdout");
-    /// ```
-    ///
     pub fn export_to<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         write!(writer, "BEGIN:VCALENDAR\r\n")?;
         write!(writer, "PRODID:{}\r\n", &self.prodid)?;
@@ -391,19 +392,11 @@ impl Calendar {
         Ok(())
     }
 
-    ///Export iCalendar to a file.
-    ///
-    /// # iCalendar to a file
-    /// ```
-    ///  match ical.export_ics("ical.ics"){
-    ///        Ok(_) => println!("OK"),
-    ///        Err(_) => panic!("Err")
-    ///    };
-    /// ```
+    /// Export iCalendar to a file.
     pub fn export_ics(&self, path: &str) -> io::Result<bool> {
         let mut data = "BEGIN:VCALENDAR\r\n".to_string();
         let path = Path::new(path);
-        let mut f = File::create(&path)?;
+        let mut f = File::create(path)?;
         data.push_str("PRODID:");
         data.push_str(&self.prodid);
         data.push_str("\r\n");
@@ -467,5 +460,16 @@ impl Calendar {
             Ok(_) => Ok(true),
             Err(e) => Err(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_convert_datetime() {
+        let val = convert_datetime("20190522T232701Z", "%Y%m%dT%H%M%SZ").unwrap();
+        println!("{}", val);
     }
 }

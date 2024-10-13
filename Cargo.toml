@@ -2,7 +2,7 @@
 name = "web_ical"
 version = "0.1.2"
 authors = ["Dayrel Negrin Hernandez <panoramicaplace@gmail.com>", "Ward Segers <w@rdsegers.be>"]
-edition = "2018"
+edition = "2021"
 description = "web_ical is an esay iCalendar Rust library. It’s goals are to read and write ics web files (Google Calendar, Airbnb Calendar and more) data in a developer-friendly way."
 homepage = "https://github.com/otoxteam/web_ical"
 documentation = "https://docs.rs/web_ical/"
@@ -14,7 +14,7 @@ repository = "https://github.com/otoxteam/web_ical"
 
 
 [dependencies]
-reqwest = "0.9.18"
+reqwest = { version = "0.12", features = [ "blocking" ] }
 chrono = "0.4"
 anyhow = "1.0"
 log = "0.4"
