@@ -203,22 +203,17 @@ impl Calendar {
                 "TRANSP" => {
                     even_temp.transp = value_cal;
                 }
-              
-                "DTSTART" => match convert_datetime(&value_cal, "%Y%m%dT%H%M%SZ") {
-                    Ok(val) => {
+
+                "DTSTART" => {
+                    if let Ok(val) = convert_datetime(&value_cal, "%Y%m%dT%H%M%SZ") {
                         even_temp.dtstart = val;
                     }
-                    Err(_) => (),
-                },
+                }
                 "DTSTART;VALUE=DATE" => {
                     let aux_date = value_cal + "T000000Z";
-                    match convert_datetime(&aux_date, "%Y%m%dT%H%M%SZ") {
-                        Ok(val) => {
-                            even_temp.dtstart = val;
-                        }
-                        Err(_) => (),
+                    if let Ok(val) = convert_datetime(&aux_date, "%Y%m%dT%H%M%SZ") {
+                        even_temp.dtstart = val;
                     }
-
                 }
                 "DTEND;VALUE=DATE" => {
                     let time_cal = "T002611Z";
@@ -403,7 +398,7 @@ impl Calendar {
     pub fn export_ics(&self, path: &str) -> io::Result<bool> {
         let mut data = "BEGIN:VCALENDAR\r\n".to_string();
         let path = Path::new(path);
-        let mut f = File::create(&path)?;
+        let mut f = File::create(path)?;
         data.push_str("PRODID:");
         data.push_str(&self.prodid);
         data.push_str("\r\n");
